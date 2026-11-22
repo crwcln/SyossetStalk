@@ -29,6 +29,14 @@ async function post(path, body) {
     body: JSON.stringify(body || {}),
     cache: 'no-store',
   });
+  const type = res.headers.get('content-type') || '';
+  if (!type.includes('json')) {
+    // Static hosting (EdgeOne etc.) answers every path with index.html — there is no worker behind it.
+    const err = new Error('No game server at this address — this is a static copy of the page.');
+    err.status = res.status;
+    err.data = {};
+    throw err;
+  }
   let data = null;
   try {
     data = await res.json();
