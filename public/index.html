@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>SyossetStalk</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+<meta name="theme-color" content="#060a11" />
+<meta name="description" content="Radar-ping manhunt through Syosset High School. Everyone is hunted. Everyone is hunting." />
+<link rel="stylesheet" href="/styles.css" />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='13' fill='%23060a11' stroke='%23ffd166' stroke-width='2'/%3E%3Ccircle cx='16' cy='16' r='6' fill='none' stroke='%234dd8ff' stroke-width='2'/%3E%3Ccircle cx='16' cy='16' r='2' fill='%23ff4d6d'/%3E%3C/svg%3E" />
+</head>
+<body>
+<div id="app">
+  <canvas id="game" aria-hidden="true"></canvas>
+  <div id="scanlines" aria-hidden="true"></div>
+  <div id="zoneVignette" aria-hidden="true"></div>
+
+  <!-- ───────────────────────── title ───────────────────────── -->
+  <section id="screen-title" class="screen active">
+    <div class="title-wrap">
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true"><span></span><span></span><span></span></div>
+        <h1>SYOSSET<span>STALK</span></h1>
+        <p class="tagline">Everyone has a bounty. Everyone is being hunted.<br />
+          <em>Radar pings only. Codes to confirm. Don't get pinned.</em></p>
+      </div>
+
+      <div class="title-grid">
+        <div class="panel join-panel">
+          <label class="field">
+            <span>CALLSIGN</span>
+            <input id="nameInput" maxlength="12" autocomplete="off" spellcheck="false" placeholder="YOUR NAME" />
+          </label>
+          <button id="btnCreate" class="btn btn-primary btn-lg">OPEN A HUNT</button>
+          <div class="or"><span>or join a room</span></div>
+          <div class="join-row">
+            <input id="codeInput" class="code-input" maxlength="4" autocomplete="off" spellcheck="false" placeholder="CODE" inputmode="text" />
+            <button id="btnJoin" class="btn">JOIN</button>
+          </div>
+          <p id="titleMsg" class="msg" role="status"></p>
+        </div>
+
+        <div class="panel map-panel">
+          <div class="panel-head"><span>SYOSSET HS · 1F + 2F E-HALL</span><span class="dim">REV. 10/14</span></div>
+          <canvas id="titlePreview"></canvas>
+          <div class="legend">
+            <span><i class="dot gold"></i>dead drop</span>
+            <span><i class="dot cyan"></i>stairwell</span>
+            <span><i class="dot red"></i>lockdown zone</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="rules" id="rules">
+        <button id="btnHelp" class="rules-toggle" aria-expanded="true">HOW IT WORKS</button>
+        <div class="rules-body" id="helpPanel">
+          <div class="rule"><b>01</b><h3>You are hunting one person</h3><p>Every player is assigned a target in a ring. Someone else has you. The chain is always shown in the lobby.</p></div>
+          <div class="rule"><b>02</b><h3>Positions ping, they don't stream</h3><p>Your target drops a radar blip every ~12s, tightening to ~6s. The blip is fuzzy — sprinting makes it huge, sneaking keeps it tight.</p></div>
+          <div class="rule"><b>03</b><h3>Get close, leak the code</h3><p>Within arm's reach, hold <b>GRAB</b> to interrogate. A 4-digit code leaks one digit at a time. Remember it, then punch it in.</p></div>
+          <div class="rule"><b>04</b><h3>Confirm the catch</h3><p>Enter the code to claim the bounty. Your target respawns and hunts on — the ring never stops.</p></div>
+          <div class="rule"><b>05</b><h3>The school locks down</h3><p>The safe zone shrinks all match. Outside it you bleed HP and ping constantly.</p></div>
+          <div class="rule"><b>06</b><h3>Loot the dead drops</h3><p>Scan, hide your ping, fake a ping, stim, or jam. Two slots. Use them.</p></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ───────────────────────── lobby ───────────────────────── -->
+  <section id="screen-lobby" class="screen">
+    <div class="lobby-wrap">
+      <header class="lobby-head">
+        <div>
+          <p class="eyebrow">ROOM</p>
+          <h2 id="lobbyCode">----</h2>
+        </div>
+        <div class="lobby-head-right">
+          <button id="btnCopy" class="btn btn-ghost">COPY LINK</button>
+          <button id="btnLeaveLobby" class="btn btn-ghost">LEAVE</button>
+        </div>
+      </header>
+
+      <div class="lobby-grid">
+        <div class="panel">
+          <div class="panel-head"><span>IN THE BUILDING</span><span id="lobbyCount" class="dim">0/8</span></div>
+          <ul id="lobbyPlayers" class="player-list"></ul>
+          <div class="lobby-actions">
+            <button id="btnStart" class="btn btn-primary">START HUNT</button>
+            <button id="btnBot" class="btn">+ ADD AI STALKER</button>
+          </div>
+          <p id="lobbyHint" class="msg">Waiting for at least 2 people.</p>
+        </div>
+
+        <div class="panel">
+          <div class="panel-head"><span>THE RING</span><span class="dim">who hunts who</span></div>
+          <div id="ringLine" class="ring-line"></div>
+          <div class="panel-head mt"><span>THE MAP</span><span class="dim">all doors are chokepoints</span></div>
+          <canvas id="lobbyPreview"></canvas>
+          <p class="tiny dim">Two stairwells link the 1F to the 2F E-Hall inset — one off E-hall, one off the main hall. The Student Patio is open-air but still floors you.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ───────────────────────── game ───────────────────────── -->
+  <div id="hud" class="hidden">
+    <div class="hud-top">
+      <div class="hud-left">
+        <div class="stat"><span class="k">CLOCK</span><b id="timer">5:00</b></div>
+        <div class="stat"><span class="k">BAG</span><b id="myCoins" class="gold">0</b></div>
+        <div class="stat"><span class="k">BOUNTY</span><b id="myBounty">120</b></div>
+      </div>
+      <div class="hud-mid">
+        <div id="phaseChip" class="chip">LOBBY</div>
+        <div id="pingMeter" class="ping-meter"><i></i><span>SIGNAL</span></div>
+      </div>
+      <div class="hud-right">
+        <button id="btnMinimap" class="mini-btn" aria-label="map">MAP</button>
+      </div>
+    </div>
+
+    <div class="target-card" id="targetCard">
+      <div class="tc-head"><span class="k">HUNTING</span><span id="tcPing" class="tc-ping">—</span></div>
+      <div class="tc-body">
+        <i class="dot" id="tcDot"></i>
+        <b id="tcName">—</b>
+        <span id="tcBounty" class="gold">120</span>
+      </div>
+      <div class="tc-foot"><span id="tcWhere">no recent ping</span></div>
+    </div>
+
+    <div id="hunterAlert" class="hunter-alert hidden">
+      <span class="ha-pulse"></span>
+      <div><b id="hunterName">—</b> IS IN THE HALLS WITH YOU</div>
+    </div>
+
+    <canvas id="minimap" class="minimap"></canvas>
+
+    <div id="feed" class="feed"></div>
+
+    <div id="codeStrip" class="code-strip hidden">
+      <div class="cs-label">CODE LEAK</div>
+      <div class="cs-slots" id="csSlots"></div>
+      <button id="btnCode" class="btn btn-code">ENTER CODE</button>
+    </div>
+
+    <div id="leakWarn" class="leak-warn hidden">
+      <b>YOUR CODE IS LEAKING</b><span id="leakCount">0/4</span>
+    </div>
+
+    <div id="zoneWarn" class="zone-warn hidden">OUTSIDE THE SAFE ZONE — MOVE TO THE CENTRE</div>
+
+    <div class="hud-bottom">
+      <div id="stickZone" class="stick-zone">
+        <div id="stickBase" class="stick-base hidden"><div id="stickKnob" class="stick-knob"></div></div>
+        <div class="stick-hint">DRAG TO MOVE</div>
+      </div>
+      <div class="action-cluster">
+        <div id="invSlots" class="inv-slots"></div>
+        <div class="action-row">
+          <button id="btnSneak" class="btn btn-round btn-sneak">SNEAK</button>
+          <button id="btnSprint" class="btn btn-round btn-sprint">SPRINT</button>
+        </div>
+        <button id="btnGrab" class="btn btn-grab hidden">GRAB<small>hold</small></button>
+      </div>
+    </div>
+
+    <div id="ghostOverlay" class="ghost-overlay hidden">
+      <div class="go-title" id="ghostTitle">TAGGED</div>
+      <div class="go-sub" id="ghostSub">Respawning in 9s</div>
+      <div class="go-hint">Your ping is dark while you're out. Watch the feed.</div>
+    </div>
+
+    <div id="connWarn" class="conn-warn hidden">RECONNECTING…</div>
+  </div>
+
+  <!-- ───────────────────────── game over ───────────────────────── -->
+  <section id="screen-over" class="screen">
+    <div class="over-wrap">
+      <p class="eyebrow" id="overEyebrow">MATCH COMPLETE</p>
+      <h2 id="overTitle">—</h2>
+      <div id="board" class="board"></div>
+      <div class="over-actions">
+        <button id="btnRematch" class="btn btn-primary">RUN IT BACK</button>
+        <button id="btnQuit" class="btn btn-ghost">LEAVE</button>
+      </div>
+      <p id="overHint" class="msg"></p>
+    </div>
+  </section>
+
+  <!-- ───────────────────────── keypad modal ───────────────────────── -->
+  <div id="keypad" class="modal hidden" role="dialog" aria-modal="true" aria-label="Enter target code">
+    <div class="kp">
+      <div class="kp-head">
+        <span>CONFIRM THE CATCH</span>
+        <span id="kpTimer" class="kp-timer">9.0s</span>
+      </div>
+      <p class="kp-sub" id="kpSub">Enter the 4-digit code you heard.</p>
+      <div class="kp-display" id="kpDisplay"><i></i><i></i><i></i><i></i></div>
+      <div class="kp-grid" id="kpGrid"></div>
+      <div class="kp-actions">
+        <button id="kpSubmit" class="btn btn-primary">CONFIRM</button>
+        <button id="kpClose" class="btn btn-ghost">BACK</button>
+      </div>
+      <p id="kpMsg" class="msg"></p>
+    </div>
+  </div>
+
+  <div id="toasts" class="toasts" aria-live="polite"></div>
+  <div id="fatal" class="fatal hidden"><div><h2>Something broke</h2><pre id="fatalMsg"></pre><button class="btn" onclick="location.reload()">RELOAD</button></div></div>
+</div>
+<script type="module" src="/js/app.js"></script>
+</body>
+</html>

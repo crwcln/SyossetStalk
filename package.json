@@ -1,0 +1,17 @@
+{
+  "name": "syosset-stalk",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "SyossetStalk — radar-ping manhunt on the Syosset HS floor plan",
+  "scripts": {
+    "dev": "node scripts/dev-server.mjs",
+    "check:map": "node scripts/check-map.mjs",
+    "test": "node scripts/sim-test.mjs",
+    "smoke": "node scripts/smoke.mjs",
+    "build": "node scripts/build.mjs"
+  },
+  "engines": {
+    "node": ">=22.5"
+  }
+}
